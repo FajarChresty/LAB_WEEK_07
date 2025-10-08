@@ -10,6 +10,8 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.example.lab_week_07.databinding.ActivityMapsBinding
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.OnMapReadyCallback
@@ -24,10 +26,14 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     private lateinit var requestPermissionLauncher: ActivityResultLauncher<String>
 
+    private lateinit var fusedLocationClient: FusedLocationProviderClient
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMapsBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
         requestPermissionLauncher =
             registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
@@ -57,20 +63,35 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             }
             else -> requestPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
         }
-
-        val sydney = LatLng(-34.0, 151.0)
-        mMap.addMarker(MarkerOptions().position(sydney).title("Marker in Sydney"))
-        mMap.moveCamera(CameraUpdateFactory.newLatLng(sydney))
     }
 
     private fun getLastLocation() {
-        Log.d("MapsActivity", "getLastLocation() called.")
+        if (hasLocationPermission()) {
+            try {
+                fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+                    if (location != null) {
+                        val currentLatLng = LatLng(location.latitude, location.longitude)
+                        mMap.addMarker(
+                            MarkerOptions().position(currentLatLng).title("Your Location")
+                        )
+                        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 15f))
+                        Log.d("MapsActivity", "Current location: ${location.latitude}, ${location.longitude}")
+                    } else {
+                        Log.d("MapsActivity", "Location is null")
+                    }
+                }
+            } catch (e: SecurityException) {
+                Log.e("MapsActivity", "Permission error: ${e.message}")
+            }
+        } else {
+            Log.w("MapsActivity", "Location permission not granted")
+        }
     }
 
     private fun showPermissionRationale(positiveAction: () -> Unit) {
         AlertDialog.Builder(this)
             .setTitle("Location permission")
-            .setMessage("This app will not work without knowing your current location.")
+            .setMessage("This app requires your location to show your current position on the map.")
             .setPositiveButton(android.R.string.ok) { _, _ -> positiveAction() }
             .setNegativeButton(android.R.string.cancel) { dialog, _ -> dialog.dismiss() }
             .create()
